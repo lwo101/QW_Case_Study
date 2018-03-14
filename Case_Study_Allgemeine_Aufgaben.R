@@ -26,11 +26,16 @@ names(logistikverzug_selected_df) <- column_names
 logistikverzug_selected_df$Produktionsdatum <- as.Date(logistikverzug_selected_df$Produktionsdatum)
 logistikverzug_selected_df$Wareneingang <- as.Date(logistikverzug_selected_df$Wareneingang, format = "%d.%m.%Y")
 
+<<<<<<< HEAD
 
 <<<<<<< HEAD
 # erstellen einer neuen Spalte mit der Lieferzeit in Tagen
 logistikverzug_mutated_df <- mutate(logistikverzug_selected_df, Produktionsdatum = as.Date(Produktionsdatum, origin = "%Y-%m-%d"), Lieferzeit = as.double(Wareneingang - Produktionsdatum), Farbe = "grey")
 
+=======
+# erstellen einer neuen Spalte mit der Lieferzeit. Damit die berechneten Angaben in ganzen Tagen angegeben werden runden wir das Ergebnis auf ganze Zahlen
+logistikverzug_mutated_df <- mutate(logistikverzug_selected_df, Lieferzeit = round(as.double(Wareneingang - Produktionsdatum), digits = 0))
+>>>>>>> 1c844eeec07a8ea33c3637dd7fff8306ad384532
 =======
 # erstellen einer neuen Spalte mit der Lieferzeit. Damit die berechneten Angaben in ganzen Tagen angegeben werden runden wir das Ergebnis auf ganze Zahlen
 logistikverzug_mutated_df <- mutate(logistikverzug_selected_df, Lieferzeit = round(as.double(Wareneingang - Produktionsdatum), digits = 0))
@@ -43,6 +48,7 @@ max(logistikverzug_mutated_df$Lieferzeit)
 # # Bestimmung der verschiedenen Lieferzeiten
 # lieferzeiten_unique <- unique(logistikverzug_mutated_df$Lieferzeit)
 #  n_lieferzeiten<- NROW(lieferzeiten_unique)
+<<<<<<< HEAD
 
 <<<<<<< HEAD
 
@@ -51,6 +57,9 @@ max(logistikverzug_mutated_df$Lieferzeit)
 # ggplot(logistikverzug_transformed_df, aes(x = Lieferzeit)) +
 #   geom_histogram(binwidth = 1, aes(y = ..density..))
 =======
+=======
+
+>>>>>>> 1c844eeec07a8ea33c3637dd7fff8306ad384532
 # Plot der Häufigkeit dercLieferzeiten zur Übersicht (Histogram: ..density.. gibt normierte y-Achse aus)
 ggplot(logistikverzug_transformed_df, aes(x = Lieferzeit)) +
   geom_histogram(binwidth = 1, aes(y = ..density..), bins = n_lieferzeiten)
@@ -59,6 +68,9 @@ ggplot(logistikverzug_transformed_df, aes(x = Lieferzeit)) +
 # # AUfteilung der Spalte "IDNummer" in mehrere Spalten mit int Datentypen (möglicherweise nicht nötig)
 # logistikverzug_separated_df <- separate(logistikverzug_mutated_df, col=IDNummer, into = c("ID_1", "ID_2", "ID_3", "ID_4"), sep = "-")
 # logistikverzug_transformed_df <- transform(logistikverzug_separated_df, ID_2 = as.numeric(ID_2),ID_3 = as.numeric(ID_3), ID_4 = as.numeric(ID_4))
+<<<<<<< HEAD
+>>>>>>> 1c844eeec07a8ea33c3637dd7fff8306ad384532
+=======
 >>>>>>> 1c844eeec07a8ea33c3637dd7fff8306ad384532
 
 # Testplot zur Erstellung eines Verteilungsmodells
@@ -70,6 +82,7 @@ ggplot(logistikverzug_transformed_df, aes(x = Lieferzeit)) +
 
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 # Beginn der Shiny Applikation
 library(shiny)
@@ -171,6 +184,8 @@ server <- function(session, input, output) {
 
 shinyApp(ui = ui, server = server)
 =======
+=======
+>>>>>>> 1c844eeec07a8ea33c3637dd7fff8306ad384532
 # # Beginn der Shiny Applikation
 # library(shiny)
 # 
@@ -232,4 +247,7 @@ shinyApp(ui = ui, server = server)
 # }
 # 
 # shinyApp(ui = ui, server = server)
+<<<<<<< HEAD
+>>>>>>> 1c844eeec07a8ea33c3637dd7fff8306ad384532
+=======
 >>>>>>> 1c844eeec07a8ea33c3637dd7fff8306ad384532
