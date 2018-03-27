@@ -1,4 +1,4 @@
-# Einbinden der Bibliotheken
+# Einbinden der Bibliotheken und falls nicht vorhanden, fehlende Packages installieren.
 if(!require(shiny)){
   install.packages("shiny")
   require(shiny)
@@ -24,16 +24,11 @@ if(!require(gplots)){
   require(gplots)
 }
 
-if(!require(DT)){
-  install.packages("DT")
-  require(DT)
-}
-
 # Einlesen des Datensatzes
-data <- read.csv("prepared_data.csv", header = TRUE, sep = ",", dec = ",") %>%
-  filter(!is.na(Breitengrad) & !is.na(Laengengrad))
-dataSelected <- select(data, c("Laengengrad", "Breitengrad", "Zulassungstag", "Werksnummer_Fahrzeug", "ID_Fahrzeug", "Gemeinden"))
+data <- read.csv("prepared_data.csv", header = TRUE, sep = ",", dec = ",")
+dataSelected <- select(data, c("Laengengrad", "Breitengrad", "Zulassungsdatum", "Zulassungstag", "Werksnummer_Fahrzeug", "ID_Fahrzeug", "Gemeinden"))
 
+# Funktion zur Definition von Farben für den entsprechenden Autotyp. Diese werden in der Leaflet-Karte als Markerfarben genutzt.
 getColor <- function(dataSelected) {
   sapply(dataSelected$Werksnummer_Fahrzeug, function(Werksnummer_Fahrzeug) {
     if(Werksnummer_Fahrzeug == 11) {
@@ -44,6 +39,7 @@ getColor <- function(dataSelected) {
   })
 }
 
+# Auswahl eines Icons als Marker auf der Karte
 icons <- awesomeIcons(
   icon = 'ion-android-car',
   iconColor = 'white',
@@ -51,131 +47,121 @@ icons <- awesomeIcons(
   markerColor = getColor(dataSelected)
 )
 
-zulassungApp <- shinyApp(
-  ui <- fluidPage(
-    # headerPanel(
-    titlePanel(
-      title = "Zulassung der Autos"
-    ),
-    
-    sidebarLayout(
-      sidebarPanel( 
-        fluidRow(
-          column(
-            width = 12,
-            checkboxGroupInput(
-              inputId = "kategorie",
-              label = "Autotyp",
-              choices = list("Typ 11" = 11, "Typ 12" = 12),
-              selected = c(11, 12)
-            )
+# Frontend: Design der Shiny-Oberfläche
+ui <- fluidPage(
+  titlePanel(title = "Zulassung der Autos"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      fluidRow(
+        column(
+          width = 12,
+          
+          # Multiple Auswahlen zur Filterung nach Autotyp über Checkboxen möglich, standardmäßig wird alles ausgewählt.
+          checkboxGroupInput(
+            inputId = "kategorie",
+            label = "Autotyp",
+            choices = list("Typ 11" = 11, "Typ 12" = 12),
+            selected = c(11, 12)
           )
-        ),
-        
-        sliderInput(
-          inputId = "range", 
-          label = "Tag im März:",
-          min = 1, 
-          max = 31,
-          value = range(dataSelected$Zulassungstag, na.rm = TRUE),
-          step = 1
         )
       ),
       
-      mainPanel(
-        tabsetPanel(
-          tabPanel(
-            title = "Karte",
-            leafletOutput(
-              outputId = "karte", width = "100%", height = 800
-            )
-          ),
-          
-          tabPanel(
-            title = "Heatmap",
-            leafletOutput(
-              outputId = "heatmap", width = "100%", height = 800
-            )
-          ),
-          
-          tabPanel(
-            title = "Datensatz",
-            dataTableOutput("datensatz")
-          )
-        )
+      # Filterung mithilfe eines Schiebereglers nach Zulassungstag, standardmäßig wird der maximal verfügbare Zeitbereich aus dem Datensatz gewählt.
+      sliderInput(
+        inputId = "range", 
+        label = "Tag im März:",
+        min = 1, 
+        max = 31,
+        value = range(dataSelected$Zulassungstag, na.rm = TRUE),
+        step = 1
       )
+    ),
+    
+    # Im main-Panel wird die Leaflet-Karte dargestellt. Dabei wird die Höhe dynamisch nach Fenstergröße reguliert (beste Darstellung im Browser).
+    mainPanel(
+      tags$style(type = "text/css", "#karte {height: calc(100vh - 80px) !important;}"),
+          title = "Karte",
+          leafletOutput(
+            outputId = "karte"
+      ),
+      
+      # Copyright
+      fluidRow(
+        HTML('<div align = "right"><span style="color:#000000">IDA Casestudy 2018</span> <span style="color:#428bca"><b>&copy; by Gruppe 6</b>&nbsp;&nbsp;&nbsp;</span></div>')
+      )  
     )
-  ),
-  
-  server <- function(input, output, session){
-    dataFiltered <- reactive({
-      dataSelected %>%
-        filter(Zulassungstag >= input$range[1] & Zulassungstag <= input$range[2] & Werksnummer_Fahrzeug %in% input$kategorie)
-    })
-    
-    output$karte <- renderLeaflet({
-      # Statischer Teil: Karte wird nur einmal gezeichnet.
-      leaflet(dataSelected) %>%
-        # addTiles() %>%
-        addProviderTiles("Stamen.TonerLite", options = providerTileOptions(minZoom = 6, maxZoom = 13)) %>%
-        fitBounds(
-          ~min(Laengengrad), ~min(Breitengrad), 
-          ~max(Laengengrad), ~max(Breitengrad))
-    })
-    
-    # Dynamischer Teil: Karte reagiert in Echtzeit auf die angewandten Filter, der statische Teil, d.h. die Karte 
-    # wird nicht neu geladen.
-    observe({
-      leafletProxy("karte", data = dataFiltered()) %>%
-        setMaxBounds(
-          ~min(Laengengrad), ~min(Breitengrad), 
-          ~max(Laengengrad), ~max(Breitengrad)) %>%
-        
-        # clear-Befehle als Reset vor jeder erneuten Filterveränderung
-        clearShapes() %>%
-        clearPopups() %>%
-        clearMarkers() %>%
-        clearMarkerClusters %>%
-        
-        addAwesomeMarkers(
-          lng = ~Laengengrad, 
-          lat = ~Breitengrad,
-          icon = icons,
-          popup = ~paste(
-            "<b>FahrzeugID: </b>", ID_Fahrzeug, "<br>",
-            "<b>Zulassungstag: </b>", Zulassungstag, "<br>",
-            "<b>Gemeinde: </b>", Gemeinden, "<br>",
-            "<b>Fahrzeugtyp: </b>", Werksnummer_Fahrzeug, "<br>"),
-          clusterOptions = markerClusterOptions()
-        )
-    })
-    
-    # Heatmap
-    output$heatmap <- renderLeaflet({
-      leaflet(dataSelected) %>%
-        setMaxBounds(
-          ~min(Laengengrad), ~min(Breitengrad), 
-          ~max(Laengengrad), ~max(Breitengrad)) %>%
-        addTiles(options = tileOptions(minZoom = 6, maxZoom = 13)) %>%
-        fitBounds(
-          ~min(Laengengrad), ~min(Breitengrad), 
-          ~max(Laengengrad), ~max(Breitengrad)) %>%
-        addHeatmap(lng = ~Laengengrad, lat = ~Breitengrad, max = .6, blur = 60)
-    })
-    
-    observe({
-      leafletProxy("heatmap", data = dataFiltered()) %>%
-        # Reset Heatmap
-        clearHeatmap %>%
-        # Update Heatmap
-        addHeatmap(lng = ~Laengengrad, lat = ~Breitengrad, max = .6, blur = 60)
-    })
-    
-    # Datensatz (Tabelle)
-    output$datensatz <- renderDataTable({
-      DT::datatable(dataSelected)
-    })
-  }
+  )
 )
 
-runApp(zulassungApp)
+# Backend: Der Applikation zugrundeliegende Funktionen.
+server <- function(input, output, session){
+  
+  # Die aus den Filterkriterien gebildete Schnittmenge wird von einem reactive-Container umschlossen.
+  dataFiltered <- reactive({
+    dataSelected %>%
+      filter(Zulassungstag >= input$range[1] & Zulassungstag <= input$range[2] & Werksnummer_Fahrzeug %in% input$kategorie)
+  })
+  
+  # Statischer Teil der Leaflet-Karte wird nur einmal gezeichnet.
+  output$karte <- renderLeaflet({
+    leaflet(dataSelected) %>%
+      addProviderTiles("Stamen.TonerLite", group = "Simpel (Standard)", options = providerTileOptions(minZoom = 3, maxZoom = 13)) %>%
+      addTiles(group = "Open Street Map") %>%
+      
+      # Fokus bzw. Zentrierung auf die Randkoordinaten von Deutschland (Datensatz)
+      fitBounds(
+        ~min(Laengengrad), ~min(Breitengrad), 
+        ~max(Laengengrad), ~max(Breitengrad))
+  })
+  
+  # Dynamischer Teil der Karte, Marker und weitere Objekte werden je nach Filtereinstellung resettet und aktualisiert.
+  observe({
+    leafletProxy("karte", data = dataFiltered()) %>%
+      setMaxBounds(
+        ~min(Laengengrad), ~min(Breitengrad), 
+        ~max(Laengengrad), ~max(Breitengrad)) %>%
+      
+      # clear-Befehle als Reset vor jeder erneuten Filterveränderung
+      clearShapes() %>%
+      clearPopups() %>%
+      clearMarkers() %>%
+      clearMarkerClusters %>%
+      clearHeatmap %>%
+      
+      # Verwendung von awesomeMarkers für eine individuelle, intuitive Darstellung von Markern bzw. Icons.
+      addAwesomeMarkers(
+        lng = ~Laengengrad, 
+        lat = ~Breitengrad,
+        icon = icons,
+        
+        # Popup, der alle erforderlichten, für den User relevanten Informationen gefiltert anzeigt.
+        popup = ~paste(
+          "<b>FahrzeugID: </b>", ID_Fahrzeug, "<br>",
+          "<b>Zulassungsdatum: </b>", Zulassungsdatum, "<br>",
+          "<b>Gemeinde: </b>", Gemeinden, "<br>",
+          "<b>Fahrzeugtyp: </b>", Werksnummer_Fahrzeug, "<br>"),
+        
+        # Gruppierung der Marker in Cluster je nach Zoom-Level für eine bessere Übersicht.
+        clusterOptions = markerClusterOptions(),
+        group = "Detailliert"
+      ) %>%
+      
+      # Einfügen einer Heatmap auf einer separaten Ebene (bzw. andere Gruppenzuordnung)
+      addHeatmap(lng = ~Laengengrad, lat = ~Breitengrad, max = .6, blur = 60, group = "Heatmap") %>%
+      
+      # Feinere Einstellungsmöglichkeiten, u.a. Kartenstil, überlagende Ebenen,
+      addLayersControl(
+        baseGroups = c("Simpel (Standard)", "Open Street Map"),
+        overlayGroups = c("Detailliert", "Heatmap"),
+        position = "bottomleft",
+        options = layersControlOptions(collapsed = TRUE)
+      ) %>%
+      
+      # Kartenausschnittin Form einer Mini-Map mit aktueller Position.
+      addMiniMap(width = "80", height = "80", toggleDisplay = "TRUE", zoomAnimation = "TRUE", autoToggleDisplay = "TRUE", minimized = "FALSE")
+  })
+}
+
+# Aufruf der Shiny-Applikation
+shinyApp(ui = ui, server = server)
