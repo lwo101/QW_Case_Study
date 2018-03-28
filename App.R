@@ -60,7 +60,7 @@ ui <- fluidPage(
           # Multiple Auswahlen zur Filterung nach Autotyp über Checkboxen möglich, standardmäßig wird alles ausgewählt.
           checkboxGroupInput(
             inputId = "kategorie",
-            label = "Autotyp",
+            label = "Autotyp:",
             choices = list("Typ 11" = 11, "Typ 12" = 12),
             selected = c(11, 12)
           )
@@ -70,7 +70,7 @@ ui <- fluidPage(
       # Filterung mithilfe eines Schiebereglers nach Zulassungstag, standardmäßig wird der maximal verfügbare Zeitbereich aus dem Datensatz gewählt.
       sliderInput(
         inputId = "range", 
-        label = "Tag im März:",
+        label = HTML('Tag im M&auml;rz:'),
         min = 1, 
         max = 31,
         value = range(dataSelected$Zulassungstag, na.rm = TRUE),
@@ -106,21 +106,21 @@ server <- function(input, output, session){
   # Statischer Teil der Leaflet-Karte wird nur einmal gezeichnet.
   output$karte <- renderLeaflet({
     leaflet(dataSelected) %>%
-      addProviderTiles("Stamen.TonerLite", group = "Simpel (Standard)", options = providerTileOptions(minZoom = 3, maxZoom = 13)) %>%
+      addProviderTiles("Stamen.TonerLite", group = "Simpel (Standard)", options = providerTileOptions(minZoom = 5, maxZoom = 13)) %>%
       addTiles(group = "Open Street Map") %>%
       
       # Fokus bzw. Zentrierung auf die Randkoordinaten von Deutschland (Datensatz)
       fitBounds(
-        ~min(Laengengrad), ~min(Breitengrad), 
-        ~max(Laengengrad), ~max(Breitengrad))
+        ~min(Laengengrad)-1, ~min(Breitengrad)-1, 
+        ~max(Laengengrad)+1, ~max(Breitengrad)+1)
   })
   
   # Dynamischer Teil der Karte, Marker und weitere Objekte werden je nach Filtereinstellung resettet und aktualisiert.
   observe({
     leafletProxy("karte", data = dataFiltered()) %>%
       setMaxBounds(
-        ~min(Laengengrad), ~min(Breitengrad), 
-        ~max(Laengengrad), ~max(Breitengrad)) %>%
+        ~min(Laengengrad)-1, ~min(Breitengrad)-1, 
+        ~max(Laengengrad)+1, ~max(Breitengrad)+1) %>%
       
       # clear-Befehle als Reset vor jeder erneuten Filterveränderung
       clearShapes() %>%
@@ -128,6 +128,9 @@ server <- function(input, output, session){
       clearMarkers() %>%
       clearMarkerClusters %>%
       clearHeatmap %>%
+      
+      # Einfügen einer Heatmap auf einer separaten Ebene (bzw. andere Gruppenzuordnung)
+      addHeatmap(lng = ~Laengengrad, lat = ~Breitengrad, max = .6, blur = 60, group = "Heatmap") %>%
       
       # Verwendung von awesomeMarkers für eine individuelle, intuitive Darstellung von Markern bzw. Icons.
       addAwesomeMarkers(
@@ -147,16 +150,17 @@ server <- function(input, output, session){
         group = "Detailliert"
       ) %>%
       
-      # Einfügen einer Heatmap auf einer separaten Ebene (bzw. andere Gruppenzuordnung)
-      addHeatmap(lng = ~Laengengrad, lat = ~Breitengrad, max = .6, blur = 60, group = "Heatmap") %>%
-      
       # Feinere Einstellungsmöglichkeiten, u.a. Kartenstil, überlagende Ebenen,
       addLayersControl(
         baseGroups = c("Simpel (Standard)", "Open Street Map"),
         overlayGroups = c("Detailliert", "Heatmap"),
         position = "bottomleft",
-        options = layersControlOptions(collapsed = TRUE)
+        options = layersControlOptions(collapsed = FALSE)
       ) %>%
+      
+      
+      # Heatmap-Layer bei Start der Applikation ausblenden.
+      hideGroup(group = "Heatmap") %>%
       
       # Kartenausschnittin Form einer Mini-Map mit aktueller Position.
       addMiniMap(width = "80", height = "80", toggleDisplay = "TRUE", zoomAnimation = "TRUE", autoToggleDisplay = "TRUE", minimized = "FALSE")
