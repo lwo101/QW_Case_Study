@@ -1,0 +1,190 @@
+---
+title: "Allgemeine Aufgaben"
+author: "Gruppe 6: Jannis Brodmann, Timos Ioannou, Aron Rogmann, Lukas Wolff & Bobby Xiong"
+date: "31. März 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message = FALSE, warning = FALSE, echo = FALSE}
+# Einbinden der benötigten Bibliotheken
+if(!require(tidyverse)){
+  install.packages("tidyverse")
+  require(tidyverse)
+}
+
+if(!require(lubridate)){
+  install.packages("lubridate")
+  require(lubridate)
+}
+
+if(!require(microbenchmark)){
+  install.packages("microbenchmark")
+  require(microbenchmark)
+}
+
+if(!require(dplyr)){
+  install.packages("dplyr")
+  require(dplyr)
+}
+
+if(!require(sqldf)){
+  install.packages("sqldf")
+  require(sqldf)
+}
+
+if(!require(fitdistrplus)){
+  install.packages("fitdistrplus")
+  require(fitdistrplus)
+}
+
+if(!require(logspline)){
+  install.packages("logspline")
+  require(logspline)
+}
+
+#######################################
+### R Markdown: Allgemeine Aufgaben ###
+#######################################
+```
+
+Zur Lösung der gestellten Aufgaben ist es zunächst notwendig die beiden vorliegenden Datensätze in geeigneter Weise zu einem Datensatz, der alle relevanten Information enthält, zusammenzufügen. Dazu lesen wir die Datensätze "Komponente_K7.csv" und "Logistikverzug_K7.csv" zu Beginn in R ein. Da in beiden Datensätzen die jeweiligen Einträge per Semikolon getrennt sind, verwenden wir zum Einlesen die *read.csv2()* Funktion aus der *tidyverse* Bibliothek. Wir überprüfen die eingelesenen Datensätze im Anschluss auf Auffälligkeiten, die womöglich dem Einleseprozess geschuldet sind. Dazu lassen wir uns die Structure der beiden Datensätze anzeigen und prüfen die Daten auf das Vorhandensein von NA's:
+
+```{r message = FALSE, warning = FALSE}
+komponente_k7 <- read.csv2("Komponente_K7.csv", header = TRUE, stringsAsFactors = FALSE)
+logistikverzug_k7 <- read.csv2("Logistikverzug_K7.csv", header = TRUE, stringsAsFactors = FALSE)
+
+str(komponente_k7)
+anyNA(komponente_k7)
+
+str(logistikverzug_k7)
+anyNA(logistikverzug_k7)
+```
+
+Wie wir leicht sehen können enthalten beide Datensätze dieselbe Anzahl von Zeilen (observations) und auch keine NA's. Es lässt sich an dieser Stelle vermuten, dass für jedes produzierte Teil alle in den Datensätzen aufgeführten Beobachtungen vorliegen. Daher verwenden wir zum Verbinden der Daten einen Innerjoin und nutzen dafür jeweils die Spalte mit der ID-Nummer.
+
+## Merkmals- und Zeilenanzahl
+
+Unter Vorraussetzung unserer Vermutung sollte sich nach dem Join die Zeilenanzahl nicht ändern. Dies lässt sich auch bestätigen:
+
+```{r message = FALSE, warning = FALSE}
+logistikverzug_combined_df <- inner_join(komponente_k7, logistikverzug_k7, by = "IDNummer")
+
+str(logistikverzug_combined_df)
+anyNA(logistikverzug_combined_df)
+```
+
+Die Anzahl der Zeilen (observations) des gejointen Datensatzes beträgt also `r NROW(logistikverzug_combined_df)` und die Anzahl der Merkmale (variables) `r NCOL(logistikverzug_combined_df)`.
+
+## Schema der Spaltenbenennung
+
+Anhand des Outputs der str()-Funktion aus dem vorhergehenden Code Beispiel lässt sich ebenfalls gut erkennen, nach welchem Prinzip die Namensvergabe bei doppelt vorkommenden Spalten erfolgt. R benennt die Spalten mit "Spaltenname.x" für den ersten Datensatz und mit "Spaltenname.y" für den Zweiten.
+
+## Effektivität des Joins
+
+Um die Effektivität des verwendeten Innerjoins zu beurteilen vergleichen wir die benötigte Rechenzeit mit der von zwei gängigen Innerjoin Alternativen, der Base-R Funktion *merge()* und mittels eines Inner Join, welchen wir mit der *sqldf* Library erstellen. Dazu verwenden wir einen kurzen Microbenchmark:
+
+```{r message = FALSE, warning = FALSE, echo = FALSE, fig.width=12, fig.height=8}
+ set.seed(123)
+ df1 <- komponente_k7
+ df2 <- logistikverzug_k7
+ 
+ # Erstellung des microbenchmark-Objektes für die 3 erwähnten Join Möglichkeiten  
+result <- microbenchmark(times = 10L,
+                baseR = merge(df1, df2, by = "IDNummer"),
+                sqldf = sqldf("SELECT * FROM df1 INNER JOIN df2 ON df1.IDNUmmer = df2.IDNummer"),
+                dplyr = inner_join(df1, df2, by = "IDNummer"))
+result
+boxplot(result, main="Ausführungszeiten eines Innerjoin", 
+  	xlab="Methode", ylab="Zeit in ms")
+```
+
+Wie das Ergebnis des Microbenchmark zeigt, ist die *dplyr*-Funktion deutlich schneller als die beiden anderen Alternativen. Im Durchschnitt ist die *dplyr*-Funktion circa um den Faktor 10 schneller als die BaseR- und *sqldf*-Funktionen, daher kann man ebenso von einer deutlich höheren Effektivität des Joins sprechen. Zur Bearbeitung der vorliegenden Aufgabe, verkleinern wir den Datensatz um die doppelt vorkommenden Spalten. Zudem liefern uns die Angaben der Werks- und Herstellernummer, sowie die Spalte über die Fehlerhaftigkeit des Bauteils keine relevanten Informationen, weshalb wir auch diese Spalten aus dem Datensatz löschen:
+
+```{r message = FALSE, warning = FALSE}
+logistikverzug_selected_df <-  dplyr::select(logistikverzug_combined_df, 1:3, 8)
+```
+
+Zur besseren Übersichtlichkeit benennen wir die übrigen, mit ".x" benannten, Spalten um:
+
+```{r message = FALSE, warning = FALSE}
+column_names <- c( "X","IDNummer", "Produktionsdatum", "Wareneingang")
+names(logistikverzug_selected_df) <- column_names
+```
+
+Mithilfe der as.Date()-Funktion wandeln wir die Angaben zum Produktionsdatum und dem Wareneingang in Datumsformate um. Dies ermöglicht uns später eine einfache Berechnung des Logistikverzuges. Anschließend erstellen wir eine neue Spalte im Datensatz, welche die erforderlichen Informationen zum Logistikverzug enthält. Dieser ergibt sich aus der Differenz des Datums des Wareneingangs und des Produktionsdatums:
+
+```{r message = FALSE, warning = FALSE}
+logistikverzug_selected_df$Produktionsdatum <- as.Date(logistikverzug_selected_df$Produktionsdatum)
+logistikverzug_selected_df$Wareneingang <- as.Date(logistikverzug_selected_df$Wareneingang, format = "%d.%m.%Y")
+logistikverzug_mutated_df <- mutate(logistikverzug_selected_df, Produktionsdatum = as.Date(Produktionsdatum, origin = "%Y-%m-%d"), Lieferzeit = round(as.double(Wareneingang - Produktionsdatum),0))
+```
+
+## Erstellung eines Verteilungsmodells
+
+Nun können wir mit den Funktionen min() und max() leicht den minimalen und maximalen Logistikverzug bestimmen. Zwischen Warenausgang und Wareneingang vergehen also mindestens `r min(logistikverzug_mutated_df$Lieferzeit)` und höchstens `r max(logistikverzug_mutated_df$Lieferzeit)` Tage. Um zu bestimmen, wie die vorliegenden Daten verteilt sind, betrachten wir zunächst ein einfaches Histogramm des Logistikverzuges:
+
+```{r message = FALSE, warning = FALSE, echo = FALSE, fig.width=12, fig.height=8}
+lieferzeiten_unique <- unique(logistikverzug_mutated_df$Lieferzeit)
+n_lieferzeiten<- NROW(lieferzeiten_unique)
+
+ggplot(logistikverzug_mutated_df, aes(x = Lieferzeit)) +
+  geom_histogram(binwidth = 1, aes(y = ..density..), bins = n_lieferzeiten)+
+  ggtitle("Histogramm der Lieferzeiten")+
+  theme(plot.title = element_text(hjust = 0.5, face="bold.italic"))+
+  xlab("Lieferzeit in Tagen")+
+  ylab("Relative Häufigkeit")
+
+```
+
+Mit Hilfe der *mean* und der *sd* Funktion konnten wir feststellen, dass der Mittelwert der Lieferzeit  bei `r round(mean(logistikverzug_mutated_df$Lieferzeit), 2)` Tagen mit einer Standardabweichung von `r round(sd(logistikverzug_mutated_df$Lieferzeit), 2)` Tagen liegt. Um herauszufinden welcher Verteilung die Daten unterliegen, haben wir im fitdistrplus-Package von R die descdist() Funktion benutzt, um unseren Datensatz mit gängigen diskreten Verteilungen zu vergleichen. Wir haben hier zunächst nur diskrete Verteilungen betrachtet, da uns die Daten über die Lieferzeit ja auch nur in diskreter Form vorliegen.
+
+```{r message = FALSE, warning = FALSE, echo = FALSE, fig.width=12, fig.height=8}
+df <- logistikverzug_mutated_df$Lieferzeit
+data <- logistikverzug_mutated_df$Lieferzeit
+m <- mean(logistikverzug_mutated_df$Lieferzeit)
+descdist(df, discrete = TRUE)
+
+```
+
+Durch eine Analyse des Cullen and Frey Graphen, kann man sehen, dass die negative Binomialverteilung den uns vorliegenden Ausprägungen der Lieferzeit am nächsten kommt. Diese Verteilung haben wir deshalb genauer betrachtet.
+
+```{r message = FALSE, warning = FALSE, echo = FALSE, fig.width=12, fig.height=8}
+fit.bino <- fitdist(df, "nbinom")
+plot(fit.bino)
+
+```
+
+Wie man im linken Plot sehen kann, lässt sich die Lieferzeit zwar mit einer negativen Binomialverteilung approximieren, allerdings spiegelt sich die beobachtete Spitze bei einer Lieferzeit von 5 Tagen schlecht in der Verteilung wieder. Dies kann man durch den großen Unterschied zwischen der erwarteten (*theoretical*) und realisierten (*empirical*) relativen Häufigkeit bei einer Lieferzeit von 5 Tagen erkennen.
+
+Aus diesem Grund haben wir auch noch versucht die Lieferzeit mit einer Normalverteilung zu approximieren, auch wenn die uns gegebenen Daten über die Lieferzeit diskret waren. 
+
+```{r message = FALSE, warning = FALSE, echo = FALSE, fig.width=12, fig.height=8}
+data <- logistikverzug_mutated_df$Lieferzeit
+m <- mean(logistikverzug_mutated_df$Lieferzeit)
+sdv <- sd(logistikverzug_mutated_df$Lieferzeit)
+mini <- min(logistikverzug_mutated_df$Lieferzeit) 
+maxi <- max(logistikverzug_mutated_df$Lieferzeit)
+  
+x <- seq(mini, maxi, length = 100)
+normv <- dnorm(x, m, sdv)
+
+df <- data.frame(x, normv)
+
+ggplot(logistikverzug_mutated_df, aes(x = Lieferzeit)) +
+  geom_histogram(binwidth = 1, aes(y = ..density..), alpha = 0.5, bins = n_lieferzeiten)+
+  geom_line(data = df,  aes(x = x, y = normv), size = 0.8, color = 'red')+
+  ggtitle("Approximation der Verteilung durch Normalverteilung")+
+  theme(plot.title = element_text(hjust = 0.5, face="bold.italic"))+
+  xlab("Lieferzeit in Tagen")+
+  ylab("Relative Häufigkeit")
+
+```
+
+Wie man aus dem obigen Plot erkennnen kann, schafft es die Normalverteilung wesentlich besser als die negative Binomialverteilung die Spitze der Verteilung um den Mittelwert darzustellen. Auch wenn einige Voraussetzungen für das Vorliegen einer Normalverteilung verletzt sind (keine stetigen Daten, Lieferzeit kann nicht negativ sein und ist damit bei 0 theoretisch beschränkt), scheint sich die Verteilung der uns gegebenen Lieferzeit am besten mit einer Normalverteilung approximieren zu lassen.
+

@@ -1,4 +1,26 @@
 # Einbinden der Bibliotheken und falls nicht vorhanden, fehlende Packages installieren.
+# zur Vorbereitung der Datensätze
+if(!require(tidyr)){
+  install.packages("tidyr")
+  require(tidyr)
+}
+
+if(!require(plyr)){
+  install.packages("plyr")
+  require(plyr)
+}
+
+if(!require(dplyr)){
+  install.packages("dplyr")
+  require(dplyr)
+}
+
+if(!require(data.table)){
+  install.packages("data.table")
+  require(data.table)
+}
+
+# zur Erstellung der Shiny-Applikation
 if(!require(shiny)){
   install.packages("shiny")
   require(shiny)
@@ -24,8 +46,10 @@ if(!require(gplots)){
   require(gplots)
 }
 
+paste("Shiny-App wird gebaut...")
+
 # Einlesen des Datensatzes
-data <- read.csv("prepared_data.csv", header = TRUE, sep = ",", dec = ",")
+data <- read.csv("Case_Study_Datensatz.csv", header = TRUE, sep = ",", dec = ",")
 dataSelected <- select(data, c("Laengengrad", "Breitengrad", "Zulassungsdatum", "Zulassungstag", "Werksnummer_Fahrzeug", "ID_Fahrzeug", "Gemeinden"))
 
 # Funktion zur Definition von Farben für den entsprechenden Autotyp. Diese werden in der Leaflet-Karte als Markerfarben genutzt.
@@ -80,7 +104,9 @@ ui <- fluidPage(
     
     # Im main-Panel wird die Leaflet-Karte dargestellt. Dabei wird die Höhe dynamisch nach Fenstergröße reguliert (beste Darstellung im Browser).
     mainPanel(
-      tags$style(type = "text/css", "#karte {height: calc(100vh - 80px) !important;}"),
+      
+      # Dynamische Kartengröße in Relation zur Fensterbreite und -höhe.
+      tags$style(type = "text/css", "#karte {height: calc(100vh - 120px) !important;}"),
           title = "Karte",
           leafletOutput(
             outputId = "karte"
@@ -88,7 +114,7 @@ ui <- fluidPage(
       
       # Copyright
       fluidRow(
-        HTML('<div align = "right"><span style="color:#000000">IDA Casestudy 2018</span> <span style="color:#428bca"><b>&copy; by Gruppe 6</b>&nbsp;&nbsp;&nbsp;</span></div>')
+        HTML('<div style ="padding-left: 14px;" align = "left"><b>IDA Casestudy 2018 <span style="color:#428bca">&copy; by Gruppe 6:</span></b><br />Jannis Brodmann, Timos Ioannou, Aron Rogmann, Lukas Wolff &amp; Bobby Xiong</div>')
       )  
     )
   )
@@ -105,6 +131,17 @@ server <- function(input, output, session){
   
   # Statischer Teil der Leaflet-Karte wird nur einmal gezeichnet.
   output$karte <- renderLeaflet({
+    
+    withProgress(
+      message = 'Bitte warten...',
+      detail = 'Die Anwendung lädt den .csv-Datensatz in Leaflet.', value = 0, {
+        for (i in 1:10) {
+          incProgress(1/10)
+          Sys.sleep(0.1)
+        }
+      }
+    )
+    
     leaflet(dataSelected) %>%
       addProviderTiles("Stamen.TonerLite", group = "Simpel (Standard)", options = providerTileOptions(minZoom = 5, maxZoom = 13)) %>%
       addTiles(group = "Open Street Map") %>%
@@ -117,6 +154,16 @@ server <- function(input, output, session){
   
   # Dynamischer Teil der Karte, Marker und weitere Objekte werden je nach Filtereinstellung resettet und aktualisiert.
   observe({
+    withProgress(
+      message = 'Bitte warten...',
+      detail = 'Der Filter wird angewandt.', value = 0, {
+        for (i in 1:10) {
+          incProgress(1/10)
+          Sys.sleep(0.1)
+        }
+      }
+    )
+    
     leafletProxy("karte", data = dataFiltered()) %>%
       setMaxBounds(
         ~min(Laengengrad)-1, ~min(Breitengrad)-1, 
@@ -155,7 +202,7 @@ server <- function(input, output, session){
         baseGroups = c("Simpel (Standard)", "Open Street Map"),
         overlayGroups = c("Detailliert", "Heatmap"),
         position = "bottomleft",
-        options = layersControlOptions(collapsed = FALSE)
+        options = layersControlOptions(collapsed = TRUE)
       ) %>%
       
       
@@ -169,3 +216,4 @@ server <- function(input, output, session){
 
 # Aufruf der Shiny-Applikation
 shinyApp(ui = ui, server = server)
+
